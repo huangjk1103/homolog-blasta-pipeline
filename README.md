@@ -1,6 +1,6 @@
 # Homolog-Blast Pipeline
 
-Planctomycetota（浮霉菌门）基因组同源基因分析全自动化 Pipeline。
+通用基因组同源基因分析全自动化 Pipeline。
 
 从单条查询序列出发，自动完成：**BLASTP 同源搜索 → cd-hit 去冗余 → MAFFT 多序列比对 → trimAl 修剪 → FastTree 进化树构建 → 树注释 → 统计报告**
 
