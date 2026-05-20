@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planctomycetota 同源分析可视化</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1923;
+  --surface: #1a2433;
+  --surface2: #243044;
+  --border: #2d3f56;
+  --text: #e0e8f0;
+  --text-dim: #7a8fa8;
+  --accent: #3d9be9;
+  --accent2: #9b59b6;
+  --green: #27ae60;
+  --orange: #e67e22;
+  --red: #e74c3c;
+  --header-bg: #1a2a3a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* === TOP BAR === */
+#topbar {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+}
+
+#topbar h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  margin-right: 20px;
+}
+
+.file-drop {
+  border: 1.5px dashed var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.file-drop:hover, .file-drop.dragover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(61,155,233,0.08);
+}
+
+.btn {
+  padding: 6px 14px;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #5aabef; }
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.btn-outline:hover { border-color: var(--text-dim); color: var(--text); }
+
+#loaded-files {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: 10px;
+}
+
+.file-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-chip .remove {
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.file-chip .remove:hover { color: var(--red); }
+
+/* === MAIN LAYOUT === */
+#main {
+  display: flex;
+  height: calc(100vh - 56px);
+}
+
+/* === LEFT SIDEBAR === */
+#sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 11px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+#sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Stats */
+.stat-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.stat-card .label { font-size: 11px; color: var(--text-dim); }
+.stat-card .value { font-size: 22px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+
+/* File list */
+.file-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 10px;
+  margin-bottom: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.file-item:hover { border-color: var(--accent); }
+.file-item .fname { color: var(--text); font-weight: 500; }
+.file-item .ftype { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+
+/* Genome list */
+.genome-item {
+  padding: 5px 8px;
+  border-radius: 4px;
+  margin-bottom: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+.genome-item:hover { background: var(--surface2); }
+.genome-item.selected { background: var(--surface2); border: 1px solid var(--accent); }
+.genome-item .gname { color: var(--text); }
+.genome-item .gtax { font-size: 10px; color: var(--text-dim); }
+
+/* === MAIN CONTENT === */
+#content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#view-tabs {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  display: flex;
+  gap: 4px;
+}
+
+.view-tab {
+  padding: 9px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.view-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+#view-panels {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.view-panel {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow: auto;
+  padding: 16px;
+}
+.view-panel.active { display: flex; flex-direction: column; }
+
+/* === MSA VIEWER === */
+#msa-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
+}
+
+#msa-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+#msa-toolbar input[type="text"] {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: var(--text);
+  font-size: 12px;
+  width: 200px;
+}
+
+#msa-canvas {
+  padding: 10px;
+  overflow: auto;
+  min-width: 100%;
+}
+
+#msa-svg {
+  display: block;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  user-select: none;
+}
+
+/* === BLAST TABLE === */
+#blast-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#blast-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#blast-search {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: var(--text);
+  font-size: 12px;
+  width: 240px;
+}
+
+.blast-table-wrap {
+  flex: 1;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.blast-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 900px;
+}
+
+.blast-table th {
+  background: var(--surface2);
+  color: var(--text-dim);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  z-index: 1;
+}
+.blast-table th:hover { color: var(--accent); }
+.blast-table th .sort-icon { margin-left: 4px; font-size: 9px; }
+
+.blast-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+.blast-table tr:hover td { background: rgba(61,155,233,0.06); }
+.blast-table tr.selected td { background: rgba(61,155,233,0.15); }
+
+.evalue-good { color: var(--green); }
+.evalue-mid { color: var(--orange); }
+.evalue-bad { color: var(--red); }
+
+.identity-bar {
+  display: inline-block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+/* === TREE VIEW === */
+#tree-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#tree-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#tree-svg-wrap {
+  flex: 1;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  position: relative;
+}
+
+#tree-svg {
+  display: block;
+  min-height: 400px;
+}
+
+.tree-node circle { cursor: pointer; transition: r 0.1s; }
+.tree-node circle:hover { r: 6; }
+.tree-node text { font-size: 10px; fill: var(--text-dim); pointer-events: none; }
+.tree-node.highlighted text { fill: var(--accent); font-weight: bold; }
+.tree-link { fill: none; stroke: var(--border); stroke-width: 1.5px; }
+
+#tree-tooltip {
+  position: fixed;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text);
+  pointer-events: none;
+  display: none;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  max-width: 300px;
+}
+#tree-tooltip .tip-title { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+#tree-tooltip .tip-row { margin-top: 2px; }
+#tree-tooltip .tip-label { color: var(--text-dim); margin-right: 4px; }
+
+/* === ANNOTATION EDITOR === */
+#anno-panel {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  overflow: hidden;
+}
+
+#anno-genome-list {
+  width: 280px;
+  min-width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#anno-toolbar {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+}
+
+#anno-search {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+#anno-genomes {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+#anno-editor {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.anno-field {
+  margin-bottom: 14px;
+}
+.anno-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.anno-field input, .anno-field select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+.anno-field input:focus, .anno-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.anno-field .empty-val { border-color: var(--orange); }
+
+/* Color legend */
+.phylum-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--surface2);
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* === DOWNLOAD SVG === */
+.svg-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.svg-download-btn:hover { background: #5aabef; }
+
+/* === RESPONSIVE === */
+@media (max-width: 900px) {
+  #sidebar { width: 180px; min-width: 180px; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  display: none;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 400px;
+  width: 90%;
+}
+.modal h3 { margin-bottom: 12px; color: var(--accent); }
+.modal p { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+.modal-actions { margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+  font-size: 14px;
+  gap: 10px;
+}
+.empty-state .icon { font-size: 40px; opacity: 0.4; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>🧬 Planctomycetota 同源分析可视化</h1>
+  <label class="file-drop" id="file-drop">
+    📂 加载文件
+    <input type="file" multiple accept=".fasta,.fa,.faa,.blast,.txt,.tsv,.treefile,.nwk,.xlsx" style="display:none" id="file-input">
+  </label>
+  <button class="btn btn-outline" onclick="loadDemo()">📊 示例数据</button>
+  <button class="btn btn-outline" onclick="showAbout()">ℹ️ 关于</button>
+  <div id="loaded-files"></div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-tabs">
+      <button class="tab-btn active" onclick="switchSidebarTab('stats')">统计</button>
+      <button class="tab-btn" onclick="switchSidebarTab('files')">文件</button>
+      <button class="tab-btn" onclick="switchSidebarTab('genomes')">基因组</button>
+    </div>
+    <div id="sidebar-content">
+
+      <!-- STATS PANEL -->
+      <div class="tab-panel active" id="panel-stats">
+        <div class="stat-card">
+          <div class="label">基因组数</div>
+          <div class="value" id="stat-genomes">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">序列总数</div>
+          <div class="value" id="stat-sequences">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">比对序列数</div>
+          <div class="value" id="stat-aligned">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">BLAST hit 数</div>
+          <div class="value" id="stat-blast-hits">0</div>
+        </div>
+        <div id="phylum-chart" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- FILES PANEL -->
+      <div class="tab-panel" id="panel-files">
+        <div id="file-list"></div>
+      </div>
+
+      <!-- GENOMES PANEL -->
+      <div class="tab-panel" id="panel-genomes">
+        <div style="padding:6px 2px;">
+          <input type="text" id="genome-filter" placeholder="🔍 过滤基因组..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:12px;" oninput="filterGenomes(this.value)">
+        </div>
+        <div id="genome-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div id="content">
+    <div id="view-tabs">
+      <button class="view-tab active" onclick="switchView('msa')">多序列比对</button>
+      <button class="view-tab" onclick="switchView('blast')">BLAST 结果</button>
+      <button class="view-tab" onclick="switchView('tree')">发育树</button>
+      <button class="view-tab" onclick="switchView('anno')">注释编辑</button>
+    </div>
+
+    <div id="view-panels">
+
+      <!-- MSA PANEL -->
+      <div class="view-panel active" id="panel-msa">
+        <div id="msa-container">
+          <div id="msa-toolbar">
+            <input type="text" id="msa-search" placeholder="🔍 搜索序列 ID..." oninput="renderMSA()">
+            <span style="font-size:11px;color:var(--text-dim);" id="msa-info"></span>
+            <span style="flex:1"></span>
+            <button class="svg-download-btn" onclick="downloadMSA()">⬇ SVG</button>
+          </div>
+          <div id="msa-canvas">
+            <div class="empty-state" id="msa-empty">
+              <div class="icon">🧬</div>
+              <div>加载 FASTA 文件以查看多序列比对</div>
+            </div>
+            <svg id="msa-svg" style="display:none;"></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLAST PANEL -->
+      <div class="view-panel" id="panel-blast">
+        <div id="blast-toolbar">
+          <input type="text" id="blast-search" placeholder="🔍 搜索 qseqid / sseqid..." oninput="renderBlast()">
+          <span style="font-size:11px;color:var(--text-dim);" id="blast-info"></span>
+          <span style="flex:1"></span>
+          <button class="svg-download-btn" onclick="downloadBlastSVG()">⬇ SVG</button>
+        </div>
+        <div class="blast-table-wrap">
+          <table class="blast-table" id="blast-table">
+            <thead>
+              <tr>
+                <th onclick="sortBlast(0)"># <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(1)">Query <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(2)">Subject <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(3)">Identity% <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(4)">Length <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(5)">Coverage <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(6)">E-value <span class="sort-icon">↕</span></th>
+                <th onclick="sortBlast(7)">Bitscore <span class="sort-icon">↕</span></th>
+              </tr>
+            </thead>
+            <tbody id="blast-tbody"></tbody>
+          </table>
+          <div class="empty-state" id="blast-empty" style="display:none;">
+            <div class="icon">💥</div>
+            <div>加载 BLAST Tab 文件查看结果</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TREE PANEL -->
+      <div class="view-panel" id="panel-tree">
+        <div id="tree-toolbar">
+          <button class="btn btn-outline" onclick="resetTreeZoom()">🔄 重置视图</button>
+          <button class="svg-download-btn" onclick="downloadTreeSVG()">⬇ SVG</button>
+        </div>
+        <div id="tree-svg-wrap">
+          <svg id="tree-svg" style="display:none;width:100%;min-height:500px;"></svg>
+          <div class="empty-state" id="tree-empty" style="display:flex;">
+            <div class="icon">🌲</div>
+            <div>加载 Newick 树文件查看发育树</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANNOTATION PANEL -->
+      <div class="view-panel" id="panel-anno">
+        <div id="anno-toolbar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <button class="btn btn-primary" onclick="saveAnnotation()">💾 保存修改</button>
+          <button class="btn btn-outline" onclick="exportAnnotation()">⬇ 导出 TSV</button>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:auto;" id="anno-status"></span>
+        </div>
+        <div id="anno-panel">
+          <div id="anno-genome-list">
+            <div id="anno-genomes" style="flex:1;overflow-y:auto;"></div>
+            <div class="phylum-legend" id="phylum-legend"></div>
+          </div>
+          <div id="anno-editor">
+            <div class="empty-state" id="anno-editor-empty">
+              <div class="icon">📝</div>
+              <div>选择左侧基因组以编辑注释</div>
+            </div>
+            <div id="anno-form" style="display:none;">
+              <div class="anno-field">
+                <label>Name</label>
+                <input type="text" id="af-name">
+              </div>
+              <div class="anno-field">
+                <label>Location</label>
+                <input type="text" id="af-location">
+              </div>
+              <div class="anno-field">
+                <label>Phylum</label>
+                <input type="text" id="af-phylum" class="empty-val">
+              </div>
+              <div class="anno-field">
+                <label>Class</label>
+                <input type="text" id="af-class">
+              </div>
+              <div class="anno-field">
+                <label>Order</label>
+                <input type="text" id="af-order">
+              </div>
+              <div class="anno-field">
+                <label>Family</label>
+                <input type="text" id="af-family">
+              </div>
+              <div class="anno-field">
+                <label>Genus</label>
+                <input type="text" id="af-genus" class="empty-val">
+              </div>
+              <div class="anno-field">
+                <label>Species</label>
+                <input type="text" id="af-species" class="empty-val">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tree-tooltip"></div>
+
+<!-- ABOUT MODAL -->
+<div class="modal-overlay" id="about-modal">
+  <div class="modal">
+    <h3>🧬 Planctomycetota 同源分析可视化</h3>
+    <p>交互式可视化工具，用于展示同源基因分析 Pipeline 的结果。</p>
+    <p style="margin-top:8px;"><strong>支持格式：</strong>FASTA、BLAST Tab、Newick、Excel、TSV</p>
+    <p style="margin-top:8px;"><strong>SVG 下载：</strong>每个视图右上角都有下载按钮</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="document.getElementById('about-modal').classList.remove('show')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════════ */
+const state = {
+  files: {},           // name -> { type, content }
+  fasta: { sequences: [], headers: [] },
+  blast: { rows: [], sortCol: -1, sortAsc: true },
+  tree: { newick: '', root: null },
+  taxonomy: {},        // genomeId -> { Name, Location, Phylum, ... }
+  annotations: {},     // genomeId -> { ... } (editable copy)
+  annotationOrder: [],  // ordered list of genomeIds
+  selectedGenome: null,
+  sortCol: -1,
+  sortAsc: true,
+};
+
+/* ══════════════════════════════════════════════════════════════
+   FILE LOADING
+══════════════════════════════════════════════════════════════ */
+const fileDrop = document.getElementById('file-drop');
+const fileInput = document.getElementById('file-input');
+
+fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+fileDrop.addEventListener('drop', e => { e.preventDefault(); fileDrop.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(files) {
+  Array.from(files).forEach(loadFile);
+}
+
+async function loadFile(file) {
+  const name = file.name;
+  const text = await file.text();
+  state.files[name] = { type: detectType(name, text), content: text };
+  addFileChip(name);
+  processFile(name, text);
+  refreshUI();
+}
+
+function detectType(name, text) {
+  const n = name.toLowerCase();
+  if (n.endsWith('.fasta') || n.endsWith('.fa') || n.endsWith('.faa')) return 'fasta';
+  if (n.endsWith('.blast') || n.includes('.blast')) return 'blast';
+  if (n.endsWith('.treefile') || n.endsWith('.nwk') || n.endsWith('.newick')) return 'newick';
+  if (n.endsWith('.xlsx') || n.endsWith('.xls')) return 'xlsx';
+  if (n.endsWith('.txt') || n.endsWith('.tsv')) {
+    if (text.includes('\t') && (text.includes('Phylum') || text.includes('Planctomycetota') || /GCA_|GCF_/.test(text))) return 'taxonomy';
+    if (text.includes('\t') && text.includes('evalue')) return 'blast';
+    if (/^\s*>/.test(text)) return 'fasta';
+    return 'taxonomy';
+  }
+  if (/^\s*>/.test(text)) return 'fasta';
+  if (/^\s*\(/.test(text) || /^\s*[^;\s]+;/.test(text)) return 'newick';
+  if (text.includes('\t')) return 'blast';
+  return 'unknown';
+}
+
+function addFileChip(name) {
+  const chip = document.createElement('div');
+  chip.className = 'file-chip';
+  chip.innerHTML = `<span>${name}</span><span class="remove" onclick="removeFile('${name}')">×</span>`;
+  document.getElementById('loaded-files').appendChild(chip);
+}
+
+function removeFile(name) {
+  delete state.files[name];
+  // Re-render chips
+  const container = document.getElementById('loaded-files');
+  container.innerHTML = '';
+  Object.keys(state.files).forEach(addFileChip);
+  refreshUI();
+}
+
+function processFile(name, text) {
+  const type = state.files[name].type;
+  try {
+    if (type === 'fasta') parseFasta(text);
+    else if (type === 'blast') parseBlast(text);
+    else if (type === 'newick') parseNewick(text);
+    else if (type === 'taxonomy') parseTaxonomy(text);
+    else if (type === 'xlsx') parseXlsx(text);
+  } catch(e) { console.error('Process error for', name, e); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PARSERS
+══════════════════════════════════════════════════════════════ */
+function parseFasta(text) {
+  const sequences = [];
+  const headers = [];
+  let current = null;
+  text.split('\n').forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    if (line.startsWith('>')) {
+      if (current) sequences.push(current);
+      current = { header: line.slice(1).trim(), seq: '' };
+      headers.push(line.slice(1).trim());
+    } else {
+      if (current) current.seq += line.replace(/\s/g, '');
+    }
+  });
+  if (current) sequences.push(current);
+  state.fasta.sequences = sequences;
+  state.fasta.headers = headers;
+}
+
+function parseBlast(text) {
+  const rows = [];
+  text.split('\n').forEach(line => {
+    line = line.trim();
+    if (!line || line.startsWith('#')) return;
+    const fields = line.split('\t');
+    if (fields.length < 12) return;
+    const qseqid = fields[0], sseqid = fields[1];
+    const pident = parseFloat(fields[2]);
+    const length = parseInt(fields[3]);
+    const mismatch = parseInt(fields[4]);
+    const gapopen = parseInt(fields[5]);
+    const qstart = parseInt(fields[6]), qend = parseInt(fields[7]);
+    const sstart = parseInt(fields[8]), send = parseInt(fields[9]);
+    const evalue = parseFloat(fields[10]);
+    const bitscore = parseFloat(fields[11]);
+    const coverage = length / Math.max(Math.abs(qend - qstart), 1);
+    rows.push({ qseqid, sseqid, pident, length, mismatch, gapopen, qstart, qend, sstart, send, evalue, bitscore, coverage });
+  });
+  state.blast.rows = rows;
+}
+
+function parseTaxonomy(text) {
+  const lines = text.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+  const header = lines[0].split('\t').map(h => h.trim());
+  lines.slice(1).forEach(line => {
+    const fields = line.split('\t');
+    if (fields.length < 2) return;
+    const gid = fields[0].split('.')[0].slice(-9);
+    const entry = {};
+    header.forEach((h, i) => { entry[h] = (fields[i] || '').trim(); });
+    state.taxonomy[gid] = entry;
+  });
+}
+
+function parseXlsx(binaryText) {
+  // SheetJS CDN approach - parse with SheetJS if available, otherwise skip
+  if (typeof XLSX !== 'undefined') {
+    try {
+      const data = new Uint8Array(binaryText.split('').map(c => c.charCodeAt(0)));
+      const wb = XLSX.read(data, { type: 'array' });
+      wb.SheetNames.forEach(sheetName => {
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (rows.length < 2) return;
+        const header = rows[0];
+        rows.slice(1).forEach(row => {
+          const entry = {};
+          header.forEach((h, i) => { entry[h] = (row[i] || '').toString().trim(); });
+          if (entry.Genome_ID || entry.Name || entry.GenomeID) {
+            const gid = (entry.Genome_ID || entry.Name || entry.GenomeID).split('.')[0].slice(-9);
+            state.taxonomy[gid] = entry;
+          }
+        });
+      });
+    } catch(e) { console.error('xlsx parse error', e); }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   NEWICK PARSER
+══════════════════════════════════════════════════════════════ */
+function parseNewick(text) {
+  text = text.trim();
+  state.tree.newick = text;
+  state.tree.root = parseNewickNode(text);
+}
+
+function parseNewickNode(s) {
+  s = s.trim();
+  if (!s.startsWith('(')) {
+    const colon = s.lastIndexOf(':');
+    const nameEnd = colon > 0 ? colon : s.length;
+    const semi = s.indexOf(';');
+    const name = s.slice(0, Math.min(nameEnd, semi > 0 ? semi : s.length)).trim();
+    const bl = colon > 0 ? parseFloat(s.slice(colon + 1, semi > 0 ? semi : s.length)) : 0;
+    return { name, length: bl, children: null };
+  }
+  let depth = 0, lastOpen = -1, lastColon = -1, lastClose = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(') { depth++; lastOpen = i; }
+    else if (s[i] === ')') { depth--; lastClose = i; }
+    else if (s[i] === ':' && depth === 1) lastColon = i;
+  }
+  const childrenStr = s.slice(1, lastClose);
+  const remaining = s.slice(lastClose + 1).trim();
+  const colon = remaining.indexOf(':');
+  const name = colon > 0 ? remaining.slice(0, colon).trim() : remaining.replace(/;$/,'').trim();
+  const bl = colon > 0 ? parseFloat(remaining.slice(colon + 1).replace(/;$/,'')) : 0;
+
+  const children = [];
+  let childStr = '', childDepth = 0;
+  for (let i = 0; i < childrenStr.length; i++) {
+    const c = childrenStr[i];
+    if (c === '(') childDepth++;
+    else if (c === ')') childDepth--;
+    if (c === ',' && childDepth === 0) {
+      children.push(parseNewickNode(childStr.trim()));
+      childStr = '';
+    } else {
+      childStr += c;
+    }
+  }
+  if (childStr.trim()) children.push(parseNewickNode(childStr.trim()));
+  return { name, length: bl, children };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DEMO DATA
+══════════════════════════════════════════════════════════════ */
+async function loadDemo() {
+  const base = '/mnt/d/linux/1296_genome/homolog_blastp';
+  const files = [
+    { path: `${base}/3776-murA/3776-murA_1302.fasta`, type: 'fasta' },
+    { path: `${base}/3776-murA/3776-murA_1302.blast`, type: 'blast' },
+    { path: `${base}/3776-murA/3776-murA_1302.fasta.fasttree.treefile`, type: 'newick' },
+    { path: `${base}/phylogentic_tree_annotation.txt`, type: 'taxonomy' },
+  ];
+  for (const f of files) {
+    try {
+      const resp = await fetch(`file://${f.path}`);
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      const name = f.path.split('/').pop();
+      state.files[name] = { type: f.type, content: text };
+      addFileChip(name);
+      processFile(name, text);
+    } catch(e) { console.error('demo load error', f.path, e); }
+  }
+  refreshUI();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UI REFRESH
+══════════════════════════════════════════════════════════════ */
+function refreshUI() {
+  updateStats();
+  updateFileList();
+  updateGenomeList();
+  renderMSA();
+  renderBlast();
+  renderTree();
+  renderAnnotationEditor();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   STATS & FILE LIST
+══════════════════════════════════════════════════════════════ */
+function updateStats() {
+  const genomes = new Set();
+  const allSeqs = state.fasta.sequences.length;
+  let blastHits = state.blast.rows.length;
+  state.fasta.sequences.forEach(s => {
+    const gid = extractGenomeId(s.header);
+    if (gid) genomes.add(gid);
+  });
+  document.getElementById('stat-genomes').textContent = genomes.size;
+  document.getElementById('stat-sequences').textContent = allSeqs;
+  document.getElementById('stat-aligned').textContent = allSeqs;
+  document.getElementById('stat-blast-hits').textContent = blastHits;
+  renderPhylumChart();
+}
+
+function extractGenomeId(header) {
+  const parts = header.split(/\s/)[0].split('_');
+  if (parts.length >= 1) {
+    const last = parts[parts.length - 1];
+    if (/^[A-Z]{2,}_/.test(last) || /^GC[AF]_/.test(header.split(/\s/)[0])) {
+      return header.split(/\s/)[0].split('.')[0].slice(-9);
+    }
+    return parts[0].slice(-9);
+  }
+  return header.split(/\s/)[0].slice(-9);
+}
+
+function updateFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = '';
+  Object.entries(state.files).forEach(([name, info]) => {
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    div.innerHTML = `<div class="fname">${name}</div><div class="ftype">${info.type}</div>`;
+    el.appendChild(div);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MSA VIEWER
+══════════════════════════════════════════════════════════════ */
+const MSA_COLORS = {
+  A:'#74c476', R:'#ff7f0e', N:'#1f77b4', D:'#e377c2', C:'#7f7f7f',
+  Q:'#17becf', E:'#8c564b', G:'#d62728', H:'#9467bd', I:'#bcbd22',
+  L:'#2ca02c', K:'#ff9896', M:'#ffcc00', F:'#98df8a', P:'#c5b0d5',
+  S:'#c7c7c7', T:'#aec7e8', W:'#ffbb78', Y:'#6272a4', V:'#8c564b',
+};
+
+function renderMSA() {
+  const svg = document.getElementById('msa-svg');
+  const empty = document.getElementById('msa-empty');
+  const search = document.getElementById('msa-search').value.toLowerCase();
+
+  if (state.fasta.sequences.length === 0) {
+    svg.style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+  svg.style.display = 'block';
+  empty.style.display = 'none';
+
+  let seqs = state.fasta.sequences;
+  if (search) seqs = seqs.filter(s => s.header.toLowerCase().includes(search));
+
+  if (seqs.length === 0) { svg.innerHTML = '<text x="20" y="30" fill="#7a8fa8">无匹配序列</text>'; return; }
+
+  const seqLen = Math.max(...seqs.map(s => s.seq.length));
+  const ROW_H = 16, LABEL_W = 180, CHAR_W = 9, PAD = 10;
+  const W = LABEL_W + seqLen * CHAR_W + PAD * 2;
+  const H = seqs.length * ROW_H + PAD * 2 + 30;
+
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  let html = `
+  <rect width="${W}" height="${H}" fill="#0f1923"/>
+  <rect x="${LABEL_W}" y="${PAD}" width="${seqLen * CHAR_W}" height="${seqs.length * ROW_H}" fill="#1a2433" opacity="0.3"/>
+  `;
+
+  // Conservation ruler
+  const consensus = getConservation(seqs.map(s => s.seq));
+  for (let i = 0; i < seqLen; i++) {
+    const x = LABEL_W + PAD + i * CHAR_W;
+    if (consensus[i] > 0.8) {
+      html += `<rect x="${x}" y="${PAD}" width="${CHAR_W}" height="${seqs.length * ROW_H}" fill="#27ae60" opacity="0.08"/>`;
+    }
+    html += `<line x1="${x}" y1="${PAD}" x2="${x}" y2="${PAD + seqs.length * ROW_H}" stroke="#2d3f56" stroke-width="0.5"/>`;
+  }
+
+  // Sequences
+  seqs.forEach((s, rowIdx) => {
+    const y = PAD + 20 + rowIdx * ROW_H;
+    // Label
+    const label = s.header.split(/\s/)[0];
+    const displayLabel = label.length > 22 ? label.slice(0, 20) + '…' : label;
+    html += `<text x="${PAD}" y="${y + 11}" fill="#9fb8d0" font-size="11" font-family="monospace">${escapeHtml(displayLabel)}</text>`;
+    // Sequence
+    for (let i = 0; i < s.seq.length; i++) {
+      const aa = s.seq[i].toUpperCase();
+      const x = LABEL_W + PAD + i * CHAR_W;
+      const color = MSA_COLORS[aa] || '#7a8fa8';
+      if (aa === '-') {
+        html += `<rect x="${x}" y="${y}" width="${CHAR_W}" height="${ROW_H - 2}" fill="#2d3f56" opacity="0.5"/>`;
+      } else {
+        html += `<text x="${x + 1}" y="${y + 12}" fill="${color}" font-size="12" font-family="monospace">${aa}</text>`;
+      }
+    }
+  });
+
+  // Ruler numbers
+  for (let i = 0; i < seqLen; i += 10) {
+    const x = LABEL_W + PAD + i * CHAR_W;
+    html += `<text x="${x}" y="${PAD + seqs.length * ROW_H + 18}" fill="#5a6a80" font-size="10" font-family="monospace">${i + 1}</text>`;
+  }
+
+  document.getElementById('msa-info').textContent = `${seqs.length} 条序列, ${seqLen} 列`;
+  svg.innerHTML = html;
+}
+
+function getConservation(seqs) {
+  if (!seqs.length) return [];
+  const len = Math.max(...seqs.map(s => s.length));
+  const cons = [];
+  for (let i = 0; i < len; i++) {
+    const chars = seqs.map(s => s[i] || '-').filter(c => c !== '-');
+    if (chars.length === 0) { cons.push(0); continue; }
+    const counts = {};
+    chars.forEach(c => counts[c] = (counts[c] || 0) + 1);
+    const max = Math.max(...Object.values(counts));
+    cons.push(max / chars.length);
+  }
+  return cons;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BLAST TABLE
+══════════════════════════════════════════════════════════════ */
+function renderBlast() {
+  const tbody = document.getElementById('blast-tbody');
+  const empty = document.getElementById('blast-empty');
+  const search = document.getElementById('blast-search').value.toLowerCase();
+
+  if (state.blast.rows.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'flex';
+    document.getElementById('blast-info').textContent = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  let rows = state.blast.rows;
+  if (search) rows = rows.filter(r => r.qseqid.toLowerCase().includes(search) || r.sseqid.toLowerCase().includes(search));
+
+  if (state.sortCol >= 0) {
+    const cols = ['idx','qseqid','sseqid','pident','length','coverage','evalue','bitscore'];
+    const key = cols[state.sortCol];
+    rows = [...rows].sort((a, b) => {
+      const va = a[key], vb = b[key];
+      if (typeof va === 'number') return state.sortAsc ? va - vb : vb - va;
+      return state.sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  tbody.innerHTML = rows.slice(0, 500).map((r, i) => {
+    const evalueClass = r.evalue < 1e-10 ? 'evalue-good' : r.evalue < 1e-5 ? 'evalue-mid' : 'evalue-bad';
+    const covPct = Math.round((r.qend - r.qstart + 1) / 100 * 100);
+    return `<tr onclick="selectBlastRow(this, '${escapeHtml(r.qseqid)}')">
+      <td>${i + 1}</td>
+      <td>${escapeHtml(r.qseqid)}</td>
+      <td>${escapeHtml(r.sseqid)}</td>
+      <td><span class="identity-bar" style="width:${Math.round(r.pident)}px"></span> ${r.pident.toFixed(1)}%</td>
+      <td>${r.length}</td>
+      <td>${covPct}%</td>
+      <td class="${evalueClass}">${r.evalue.toExponential(2)}</td>
+      <td>${r.bitscore.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('blast-info').textContent = `显示 ${Math.min(500, rows.length)} / ${rows.length} 条`;
+}
+
+function sortBlast(col) {
+  if (state.sortCol === col) state.sortAsc = !state.sortAsc;
+  else { state.sortCol = col; state.sortAsc = false; }
+  renderBlast();
+}
+
+function selectBlastRow(tr, qseqid) {
+  document.querySelectorAll('.blast-table tr').forEach(r => r.classList.remove('selected'));
+  tr.classList.add('selected');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PHYLOGENETIC TREE (D3.js)
+══════════════════════════════════════════════════════════════ */
+let treeZoom = null;
+
+function renderTree() {
+  const svg = document.getElementById('tree-svg');
+  const empty = document.getElementById('tree-empty');
+
+  if (!state.tree.root) {
+    svg.style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+  svg.style.display = 'block';
+  empty.style.display = 'none';
+
+  // Collect tips and build taxonomy lookup
+  const tips = [];
+  function collectTips(node) {
+    if (!node.children) tips.push(node);
+    else node.children.forEach(collectTips);
+  }
+  collectTips(state.tree.root);
+
+  // Distance between tips
+  const TIP_H = 18;
+  const LABEL_W = 160;
+  const PADDING = { top: 30, right: 80, bottom: 30, left: LABEL_W + 20 };
+
+  // Get max branch length for scale
+  const maxBL = Math.max(...tips.map(t => t.length || 0), 1);
+  const totalHeight = tips.length * TIP_H + PADDING.top + PADDING.bottom;
+  const totalWidth = Math.max(800, LABEL_W + tips.length * 8 + PADDING.right);
+
+  // Assign x positions by depth
+  const NODE_H = TIP_H;
+  let leafIdx = 0;
+  function assignPositions(node, depth) {
+    node.x = depth;
+    if (!node.children) {
+      node.y = PADDING.top + leafIdx * TIP_H;
+      leafIdx++;
+    } else {
+      node.children.forEach(c => assignPositions(c, depth + (node.length || 0) / maxBL * (totalWidth - LABEL_W - PADDING.right) + 1));
+      node.y = (node.children[0].y + node.children[node.children.length - 1].y) / 2;
+    }
+  }
+  assignPositions(state.tree.root, 0);
+
+  // Build links
+  const links = [];
+  function buildLinks(node) {
+    if (node.children) {
+      node.children.forEach(c => {
+        links.push({ source: node, target: c });
+        buildLinks(c);
+      });
+    }
+  }
+  buildLinks(state.tree.root);
+
+  const scaleX = (totalWidth - LABEL_W - PADDING.right) / maxBL;
+  const offsetX = LABEL_W + PADDING.left;
+
+  let html = `<svg width="${totalWidth}" height="${totalHeight}" style="background:#0f1923;display:block;">`;
+
+  // Links
+  links.forEach(l => {
+    const x1 = offsetX + l.source.x * scaleX;
+    const y1 = l.source.y;
+    const x2 = offsetX + l.target.x * scaleX;
+    const y2 = l.target.y;
+    const midX = (x1 + x2) / 2;
+    html += `<path class="tree-link" d="M${x1},${y1} L${midX},${y1} L${midX},${y2} L${x2},${y2}"/>`;
+  });
+
+  // Nodes
+  function renderNode(node) {
+    const x = offsetX + node.x * scaleX;
+    const y = node.y;
+    const isLeaf = !node.children;
+    const tax = findTaxonomy(node.name);
+    const phylumColor = getPhylumColor(tax ? tax.Phylum : '');
+    const gid = extractGenomeId(node.name || '');
+
+    // Circle
+    const r = isLeaf ? 3.5 : 4;
+    html += `<g class="tree-node" onmouseover="showTreeTip(event, '${escapeHtml(node.name)}', '${gid}')" onmouseout="hideTreeTip()">
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${isLeaf ? phylumColor : '#3d9be9'}" stroke="${isLeaf ? phylumColor : '#3d9be9'}" stroke-width="1.5"/>
+      ${isLeaf ? `<text x="${x + 6}" y="${y + 4}" fill="#9fb8d0" font-size="11" font-family="monospace">${escapeHtml(truncateLabel(node.name))}</text>` : ''}
+    </g>`;
+
+    if (node.children) node.children.forEach(renderNode);
+  }
+  renderNode(state.tree.root);
+
+  html += '</svg>';
+  svg.outerHTML = html;
+  document.getElementById('tree-svg-wrap').innerHTML = svg.outerHTML;
+
+  // Reattach
+  const newSvg = document.getElementById('tree-svg-wrap').querySelector('svg') || document.getElementById('tree-svg');
+  if (!document.getElementById('tree-svg')) {
+    const wrap = document.getElementById('tree-svg-wrap');
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.id = 'tree-svg';
+    s.setAttribute('style', 'display:block;width:100%;min-height:500px;');
+    wrap.appendChild(s);
+  }
+}
+
+function findTaxonomy(name) {
+  const gid = extractGenomeId(name);
+  return state.taxonomy[gid] || null;
+}
+
+const PHYLUM_COLORS = {};
+const PHYLUM_LIST = ['p__Planctomycetota', 'p__Bacteroidota', 'p__Proteobacteria', 'p__Firmicutes', 'p__Verrucomicrobiota'];
+const PHYLUM_HEX = ['#3d9be9','#27ae60','#e67e22','#9b59b6','#e74c3c','#1abc9c','#f39c12','#2ecc71','#e91e63'];
+let phylumColorIdx = 0;
+function getPhylumColor(phylum) {
+  if (!phylum || phylum === 'Unknown') return '#5a6a80';
+  if (!PHYLUM_COLORS[phylum]) {
+    PHYLUM_COLORS[phylum] = PHYLUM_HEX[phylumColorIdx % PHYLUM_HEX.length];
+    phylumColorIdx++;
+  }
+  return PHYLUM_COLORS[phylum];
+}
+
+function truncateLabel(name) {
+  if (!name) return '';
+  const label = name.split(/\s/)[0];
+  return label.length > 22 ? label.slice(0, 20) + '…' : label;
+}
+
+function showTreeTip(event, name, gid) {
+  const tip = document.getElementById('tree-tooltip');
+  const tax = state.taxonomy[gid] || null;
+  let html = `<div class="tip-title">${escapeHtml(name)}</div>`;
+  if (tax) {
+    ['Phylum','Class','Order','Family','Genus','Species'].forEach(rank => {
+      if (tax[rank]) html += `<div class="tip-row"><span class="tip-label">${rank}:</span>${escapeHtml(tax[rank])}</div>`;
+    });
+  } else {
+    html += `<div class="tip-row" style="color:#5a6a80">无分类信息</div>`;
+  }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  tip.style.left = (event.clientX + 12) + 'px';
+  tip.style.top = (event.clientY + 12) + 'px';
+}
+
+function hideTreeTip() {
+  document.getElementById('tree-tooltip').style.display = 'none';
+}
+
+function resetTreeZoom() {
+  renderTree();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ANNOTATION EDITOR
+══════════════════════════════════════════════════════════════ */
+function updateGenomeList() {
+  // Build annotation order from taxonomy
+  state.annotationOrder = Object.keys(state.taxonomy);
+  // Also add genomes from fasta
+  state.fasta.sequences.forEach(s => {
+    const gid = extractGenomeId(s.header);
+    if (gid && !state.annotationOrder.includes(gid)) state.annotationOrder.push(gid);
+  });
+  // Copy for editing
+  state.annotationOrder.forEach(gid => {
+    if (!state.annotations[gid]) state.annotations[gid] = JSON.parse(JSON.stringify(state.taxonomy[gid] || {}));
+  });
+  renderGenomeList();
+}
+
+function renderGenomeList(filter = '') {
+  const container = document.getElementById('anno-genomes');
+  const filterLower = filter.toLowerCase();
+  let items = state.annotationOrder.filter(gid => {
+    if (!filterLower) return true;
+    const ann = state.annotations[gid];
+    const searchText = [gid, ann.Name, ann.Phylum, ann.Genus].filter(Boolean).join(' ').toLowerCase();
+    return searchText.includes(filterLower);
+  });
+
+  container.innerHTML = items.slice(0, 300).map(gid => {
+    const ann = state.annotations[gid] || {};
+    const phylum = ann.Phylum || ann.phylum || '';
+    const genus = ann.Genus || ann.genus || '';
+    const color = getPhylumColor(phylum);
+    const selected = state.selectedGenome === gid ? 'selected' : '';
+    return `<div class="genome-item ${selected}" onclick="selectGenome('${escapeHtml(gid)}')">
+      <div class="gname">${escapeHtml(ann.Name || gid)}</div>
+      <div class="gtax" style="color:${color}">${escapeHtml(genus)} ${escapeHtml(phylum)}</div>
+    </div>`;
+  }).join('');
+
+  // Phylum legend
+  const legend = document.getElementById('phylum-legend');
+  legend.innerHTML = Object.entries(PHYLUM_COLORS).slice(0, 10).map(([p, c]) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div><span style="color:#7a8fa8">${p.replace('p__','')}</span></div>`
+  ).join('');
+}
+
+function selectGenome(gid) {
+  state.selectedGenome = gid;
+  renderGenomeList(document.getElementById('genome-filter')?.value || '');
+  renderAnnotationEditor();
+}
+
+function renderAnnotationEditor() {
+  const form = document.getElementById('anno-form');
+  const empty = document.getElementById('anno-editor-empty');
+  const status = document.getElementById('anno-status');
+
+  if (!state.selectedGenome || !state.annotations[state.selectedGenome]) {
+    form.style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+  form.style.display = 'block';
+  empty.style.display = 'none';
+
+  const ann = state.annotations[state.selectedGenome];
+  const fields = ['Name','Location','Phylum','Class','Order','Family','Genus','Species'];
+  fields.forEach(f => {
+    const input = document.getElementById(`af-${f.toLowerCase()}`);
+    if (input) {
+      input.value = ann[f] || ann[f.toLowerCase()] || '';
+      // Highlight empty values
+      if (!ann[f] && !ann[f.toLowerCase()]) {
+        input.classList.add('empty-val');
+      } else {
+        input.classList.remove('empty-val');
+      }
+    }
+  });
+
+  // Add listeners for live editing
+  fields.forEach(f => {
+    const input = document.getElementById(`af-${f.toLowerCase()}`);
+    if (input && !input.dataset.listener) {
+      input.dataset.listener = '1';
+      input.addEventListener('input', () => {
+        state.annotations[state.selectedGenome][f] = input.value;
+        status.textContent = '● 已修改';
+      });
+    }
+  });
+}
+
+function filterGenomes(val) {
+  renderGenomeList(val);
+}
+
+function saveAnnotation() {
+  document.getElementById('anno-status').textContent = '✅ 已保存（内存）';
+  setTimeout(() => { document.getElementById('anno-status').textContent = ''; }, 2000);
+}
+
+function exportAnnotation() {
+  const lines = ['Name\tLocation\tPhylum\tClass\tOrder\tFamily\tGenus\tSpecies'];
+  Object.values(state.annotations).forEach(ann => {
+    const row = ['Name','Location','Phylum','Class','Order','Family','Genus','Species'].map(f =>
+      escapeHtml(ann[f] || ann[f.toLowerCase()] || '')
+    ).join('\t');
+    lines.push(row);
+  });
+  downloadFile('annotation_edited.tsv', lines.join('\n'), 'text/tab-separated-values');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PHYLOGENETIC CHART
+══════════════════════════════════════════════════════════════ */
+function renderPhylumChart() {
+  const container = document.getElementById('phylum-chart');
+  const counts = {};
+  Object.values(state.annotations).forEach(ann => {
+    const p = ann.Phylum || ann.phylum || 'Unknown';
+    counts[p] = (counts[p] || 0) + 1;
+  });
+  Object.entries(state.taxonomy).forEach(([gid, ann]) => {
+    const p = ann.Phylum || ann.phylum || 'Unknown';
+    counts[p] = (counts[p] || 0) + 1;
+  });
+
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (sorted.length === 0) { container.innerHTML = ''; return; }
+
+  const max = sorted[0][1];
+  const W = 180, H = sorted.length * 20 + 10;
+  let svg = `<svg width="${W}" height="${H}" style="display:block;">`;
+  sorted.forEach(([phylum, count], i) => {
+    const barW = (count / max) * (W - 50);
+    const y = i * 20 + 2;
+    const color = getPhylumColor(phylum);
+    svg += `<rect x="0" y="${y}" width="${barW}" height="14" fill="${color}" rx="2" opacity="0.8"/>`;
+    svg += `<text x="${barW + 4}" y="${y + 11}" fill="#7a8fa8" font-size="9">${count}</text>`;
+    svg += `<text x="${W - 2}" y="${y + 11}" fill="#5a6a80" font-size="9" text-anchor="end">${phylum.replace('p__','').slice(0,12)}</text>`;
+  });
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SVG DOWNLOAD
+══════════════════════════════════════════════════════════════ */
+function getSVGOuterHTML(svgId) {
+  const el = document.getElementById(svgId);
+  if (!el) return null;
+  const clone = el.cloneNode(true);
+  // Add styles inline
+  const style = document.createElement('style');
+  style.textContent = `text{fill:#e0e8f0;font-family:monospace}rect{fill:#1a2433}line{stroke:#2d3f56}`;
+  clone.insertBefore(style, clone.firstChild);
+  return clone.outerHTML;
+}
+
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadMSA() {
+  const svg = document.getElementById('msa-svg');
+  if (!svg || svg.style.display === 'none') return;
+  const svgHtml = getSVGOuterHTML('msa-svg');
+  if (!svgHtml) return;
+  downloadFile('msa_alignment.svg', svgHtml, 'image/svg+xml');
+}
+
+function downloadBlastSVG() {
+  const svg = renderBlastSVG();
+  if (!svg) return;
+  downloadFile('blast_results.svg', svg, 'image/svg+xml');
+}
+
+function renderBlastSVG() {
+  const rows = state.blast.rows.slice(0, 100);
+  if (!rows.length) return null;
+  const COLS = [30, 120, 120, 70, 60, 70, 80, 70];
+  const COL_NAMES = ['#', 'Query', 'Subject', 'Identity', 'Length', 'Coverage', 'E-value', 'Bitscore'];
+  const ROW_H = 20;
+  const W = COLS.reduce((a, b) => a + b, 0);
+  const H = rows.length * ROW_H + 30;
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="background:#0f1923;font-family:monospace;font-size:11px;">`;
+  // Header
+  let x = 0;
+  COL_NAMES.forEach((h, i) => {
+    svg += `<rect x="${x}" y="0" width="${COLS[i]}" height="24" fill="#243044"/>`;
+    svg += `<text x="${x + 4}" y="16" fill="#7a8fa8">${escapeHtml(h)}</text>`;
+    x += COLS[i];
+  });
+  // Rows
+  rows.forEach((r, ri) => {
+    const y = 24 + ri * ROW_H;
+    const bg = ri % 2 === 0 ? '#131d28' : '#0f1923';
+    svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" fill="${bg}"/>`;
+    let cx = 0;
+    const vals = [ri + 1, r.qseqid, r.sseqid, r.pident.toFixed(1) + '%', r.length, Math.round((r.qend - r.qstart) / 100 * 100) + '%', r.evalue.toExponential(2), r.bitscore.toFixed(1)];
+    vals.forEach((v, ci) => {
+      const color = ci === 6 ? (r.evalue < 1e-10 ? '#27ae60' : r.evalue < 1e-5 ? '#e67e22' : '#e74c3c') : '#e0e8f0';
+      svg += `<text x="${cx + 4}" y="${y + 14}" fill="${color}">${escapeHtml(String(v).slice(0, 20))}</text>`;
+      cx += COLS[ci];
+    });
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+function downloadTreeSVG() {
+  const svgEl = document.getElementById('tree-svg-wrap').querySelector('svg');
+  if (!svgEl) return;
+  const clone = svgEl.cloneNode(true);
+  clone.querySelectorAll('script').forEach(s => s.remove());
+  const style = document.createElement('style');
+  style.textContent = 'text{fill:#9fb8d0;font-family:monospace;font-size:11px}.tree-link{fill:none;stroke:#2d3f56;stroke-width:1.5px}circle{transition:r 0.1s}';
+  clone.insertBefore(style, clone.firstChild);
+  downloadFile('phylogenetic_tree.svg', clone.outerHTML, 'image/svg+xml');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TABS & NAVIGATION
+══════════════════════════════════════════════════════════════ */
+function switchView(view) {
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.view-tab[onclick="switchView('${view}')"]`)?.classList.add('active');
+  document.getElementById(`panel-${view}`)?.classList.add('active');
+}
+
+function switchSidebarTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab-btn[onclick="switchSidebarTab('${tab}')"]`)?.classList.add('active');
+  document.getElementById(`panel-${tab}`)?.classList.add('active');
+}
+
+function showAbout() {
+  document.getElementById('about-modal').classList.add('show');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════════════════════════ */
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  // Load SheetJS for xlsx support
+  const script = document.createElement('script');
+  script.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+  document.head.appendChild(script);
+});
+</script>
+</body>
+</html>
